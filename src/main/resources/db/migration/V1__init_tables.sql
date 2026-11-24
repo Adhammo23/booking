@@ -19,7 +19,6 @@ CREATE TABLE services (
   CONSTRAINT ck_services_duration CHECK (duration_minutes BETWEEN 30 AND 120)
 );
 
--- المدرّسين المؤهّلين لكل خدمة (many-to-many)
 CREATE TABLE instructor_services (
   instructor_id BIGINT NOT NULL,
   service_id    BIGINT NOT NULL,
@@ -28,14 +27,13 @@ CREATE TABLE instructor_services (
   CONSTRAINT fk_is_instructor FOREIGN KEY (instructor_id) REFERENCES users(id),
   CONSTRAINT fk_is_service    FOREIGN KEY (service_id)    REFERENCES services(id)
 );
--- ملاحظة: كون instructor_id دوره INSTRUCTOR بيتفرض في الـservice، مش في الـDB.
 
 CREATE TABLE slots (
   id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   instructor_id BIGINT NOT NULL,
   service_id    BIGINT NOT NULL,
   starts_at     TIMESTAMPTZ NOT NULL,   -- UTC
-  ends_at       TIMESTAMPTZ NOT NULL,   -- UTC = starts_at + مدة الخدمة وقت النشر
+  ends_at       TIMESTAMPTZ NOT NULL,
   cancelled_at  TIMESTAMPTZ NULL,
   created_at    TIMESTAMPTZ NOT NULL,
   CONSTRAINT fk_slots_instructor FOREIGN KEY (instructor_id) REFERENCES users(id),
@@ -48,8 +46,8 @@ CREATE INDEX ix_slots_starts ON slots (starts_at);
 
 CREATE TABLE bookings (
   id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  slot_id        BIGINT NOT NULL,   -- ما بيتغيّرش بعد الإنشاء
-  learner_id     BIGINT NOT NULL,   -- ما بيتغيّرش بعد الإنشاء
+  slot_id        BIGINT NOT NULL,
+  learner_id     BIGINT NOT NULL,
   status         VARCHAR(11) NOT NULL CHECK (status IN ('CONFIRMED','CANCELLED','RESCHEDULED')),
   cancel_reason  VARCHAR(14) NULL CHECK (cancel_reason IN ('LEARNER','INSTRUCTOR','ADMIN','SLOT_CANCELLED')),
   rescheduled_to_booking_id BIGINT NULL,
@@ -60,13 +58,12 @@ CREATE TABLE bookings (
   CONSTRAINT fk_bookings_learner FOREIGN KEY (learner_id) REFERENCES users(id),
   CONSTRAINT fk_bookings_resched FOREIGN KEY (rescheduled_to_booking_id) REFERENCES bookings(id)
 );
--- R1: حجز CONFIRMED واحد بس لكل slot (partial unique index، مفيش generated column)
+
 CREATE UNIQUE INDEX uq_one_active_booking_per_slot ON bookings (slot_id) WHERE status = 'CONFIRMED';
 CREATE INDEX ix_bookings_learner ON bookings (learner_id, status);
 CREATE INDEX ix_bookings_learner_created ON bookings (learner_id, created_at);
 CREATE INDEX ix_bookings_slot ON bookings (slot_id);
 
--- سجل append-only: INSERT فقط
 CREATE TABLE booking_events (
   id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   booking_id         BIGINT NOT NULL,
